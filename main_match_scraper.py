@@ -5,19 +5,45 @@ Integrates FBRef match scraping with Kicker.de table positions
 
 import asyncio
 import logging
+import os
+import sys
+from pathlib import Path
 from bundesliga_match_scraper import BundesligaMatchScraper
 from match_excel_exporter import MatchExcelExporter
 from base_scraper import RateLimiter
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('bundesliga_match_scraper.log'),
-        logging.StreamHandler()
+# Setup logging with safe file handling for Windows
+def setup_logging():
+    """Setup logging with fallback for permission errors"""
+    handlers = [logging.StreamHandler()]
+
+    # Try to create log file in user's home directory or temp directory
+    log_paths = [
+        Path.cwd() / 'bundesliga_match_scraper.log',  # Current directory
+        Path.home() / 'bundesliga_match_scraper.log',  # User home
+        Path(os.environ.get('TEMP', '/tmp')) / 'bundesliga_match_scraper.log'  # Temp
     ]
-)
+
+    for log_path in log_paths:
+        try:
+            # Test if we can write to this location
+            log_path.touch(exist_ok=True)
+            handlers.append(logging.FileHandler(str(log_path)))
+            print(f"📝 Log file: {log_path}")
+            break
+        except (PermissionError, OSError):
+            continue
+    else:
+        print("⚠️  Warning: Could not create log file (permission denied)")
+        print("    Logs will only be shown on screen")
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=handlers
+    )
+
+setup_logging()
 logger = logging.getLogger(__name__)
 
 async def main():
