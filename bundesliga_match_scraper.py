@@ -484,13 +484,41 @@ class BundesligaMatchScraper(BaseScraper):
             # Get table positions before this match
             table_positions = await self.get_kicker_table_positions(matchday)
 
+            # Extract possession from scorebox (customer requirement: "Ballbesitz ist oben aber nicht in den Tabellen")
+            possession_data = await self.page.evaluate('''
+                () => {
+                    const scorebox = document.querySelector('.scorebox');
+                    if (!scorebox) return {};
+
+                    // Look for possession percentage
+                    const possessionDivs = scorebox.querySelectorAll('div');
+                    let homePos = null, awayPos = null;
+
+                    for (let div of possessionDivs) {
+                        const text = div.textContent;
+                        if (text.includes('Possession')) {
+                            // Find the next divs with percentages
+                            const parent = div.parentElement;
+                            const percentDivs = parent.querySelectorAll('div strong');
+                            if (percentDivs.length >= 2) {
+                                homePos = parseFloat(percentDivs[0].textContent.replace('%', ''));
+                                awayPos = parseFloat(percentDivs[1].textContent.replace('%', ''));
+                                break;
+                            }
+                        }
+                    }
+
+                    return {home_possession: homePos, away_possession: awayPos};
+                }
+            ''')
+
             match_data = {
                 'url': match_url,
                 'home_team': home_team,
                 'away_team': away_team,
                 'matchday': matchday,
-                'home_team_stats': {},
-                'away_team_stats': {},
+                'home_team_stats': {'possession': possession_data.get('home_possession')},
+                'away_team_stats': {'possession': possession_data.get('away_possession')},
                 'home_team_position': table_positions.get(self.team_name_mapping.get(home_team, home_team), 1),
                 'away_team_position': table_positions.get(self.team_name_mapping.get(away_team, away_team), 1)
             }
@@ -576,37 +604,19 @@ class BundesligaMatchScraper(BaseScraper):
                         }}
                     ''')
 
-                    # For goalkeeper stats: store ALL parameters directly (they have gk_ prefix)
-                    # For player stats: use parameter mapping to Excel template
-                    if table_type == 'keeper':
-                        # Store all goalkeeper stats directly with their FBRef names
-                        for fbref_param, value in table_data.items():
-                            if value and value != '':
-                                try:
-                                    # Remove commas and convert to float if possible
-                                    clean_value = value.replace(',', '')
-                                    if clean_value.replace('.', '').replace('-', '').isdigit():
-                                        team_stats[fbref_param] = float(clean_value)
-                                    else:
-                                        team_stats[fbref_param] = value
-                                except:
+                    # Store ALL parameters directly from FBRef (no mapping filter!)
+                    # This ensures we capture ALL available data from all 6 tabs + goalkeeper
+                    for fbref_param, value in table_data.items():
+                        if value and value != '':
+                            try:
+                                # Remove commas and convert to float if possible
+                                clean_value = value.replace(',', '')
+                                if clean_value.replace('.', '').replace('-', '').isdigit():
+                                    team_stats[fbref_param] = float(clean_value)
+                                else:
                                     team_stats[fbref_param] = value
-                    else:
-                        # For player stats: use parameter mapping to Excel template
-                        for excel_param, fbref_param in self.parameter_mapping.items():
-                            if fbref_param in table_data:
-                                value = table_data[fbref_param]
-                                # Clean numeric values
-                                if value and value != '':
-                                    try:
-                                        # Remove commas and convert to float if possible
-                                        clean_value = value.replace(',', '')
-                                        if clean_value.replace('.', '').isdigit():
-                                            team_stats[excel_param] = float(clean_value)
-                                        else:
-                                            team_stats[excel_param] = value
-                                    except:
-                                        team_stats[excel_param] = value
+                            except:
+                                team_stats[fbref_param] = value
 
                 match_data[team_key] = team_stats
 
