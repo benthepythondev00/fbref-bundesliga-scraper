@@ -535,7 +535,8 @@ class BundesligaMatchScraper(BaseScraper):
 
             for i, team_id in enumerate(team_ids[:2]):
                 team_key = 'home_team_stats' if i == 0 else 'away_team_stats'
-                team_stats = {}
+                # Initialize with existing data (possession) instead of empty dict
+                team_stats = match_data.get(team_key, {})
 
                 for table_type, tab_name in stat_tables:
                     # Goalkeeper stats use different table ID and extraction logic
