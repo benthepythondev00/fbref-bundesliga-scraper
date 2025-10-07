@@ -484,31 +484,30 @@ class BundesligaMatchScraper(BaseScraper):
             # Get table positions before this match
             table_positions = await self.get_kicker_table_positions(matchday)
 
-            # Extract possession from scorebox (customer requirement: "Ballbesitz ist oben aber nicht in den Tabellen")
+            # Extract possession from match stats table (customer requirement: "Ballbesitz ist oben aber nicht in den Tabellen")
             possession_data = await self.page.evaluate('''
                 () => {
-                    const scorebox = document.querySelector('.scorebox');
-                    if (!scorebox) return {};
-
-                    // Look for possession percentage
-                    const possessionDivs = scorebox.querySelectorAll('div');
-                    let homePos = null, awayPos = null;
-
-                    for (let div of possessionDivs) {
-                        const text = div.textContent;
-                        if (text.includes('Possession')) {
-                            // Find the next divs with percentages
-                            const parent = div.parentElement;
-                            const percentDivs = parent.querySelectorAll('div strong');
-                            if (percentDivs.length >= 2) {
-                                homePos = parseFloat(percentDivs[0].textContent.replace('%', ''));
-                                awayPos = parseFloat(percentDivs[1].textContent.replace('%', ''));
-                                break;
+                    // Find the row with "Possession" header in the table
+                    const rows = document.querySelectorAll('tr');
+                    for (let i = 0; i < rows.length; i++) {
+                        const row = rows[i];
+                        if (row.textContent.trim() === 'Possession') {
+                            // Next row has the percentages
+                            const dataRow = rows[i + 1];
+                            if (dataRow) {
+                                const cells = dataRow.querySelectorAll('td');
+                                if (cells.length >= 2) {
+                                    const homeStrong = cells[0].querySelector('strong');
+                                    const awayStrong = cells[1].querySelector('strong');
+                                    return {
+                                        home_possession: homeStrong ? parseFloat(homeStrong.textContent.replace('%', '')) : null,
+                                        away_possession: awayStrong ? parseFloat(awayStrong.textContent.replace('%', '')) : null
+                                    };
+                                }
                             }
                         }
                     }
-
-                    return {home_possession: homePos, away_possession: awayPos};
+                    return {home_possession: null, away_possession: null};
                 }
             ''')
 
