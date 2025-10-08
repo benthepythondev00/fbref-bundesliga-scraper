@@ -545,17 +545,24 @@ class BundesligaMatchScraper(BaseScraper):
                     else:
                         table_id = f"stats_{team_id}_{table_type}"
 
-                    # No need to click tabs - all tables are already in the DOM
+                    # All tables are already in the DOM - no need to click tabs
                     # FBRef loads all 6 player stat tables + goalkeeper table on page load
 
                     # Extract data: Team totals for player stats, goalkeeper row for keeper stats
                     table_data = await self.page.evaluate(f'''
                         () => {{
                             const table = document.querySelector('#{table_id}');
-                            if (!table) return {{}};
+                            if (!table) {{
+                                console.log('ERROR: Table #{table_id} not found!');
+                                return {{}};
+                            }}
+                            console.log('SUCCESS: Found table #{table_id}');
 
                             const rows = table.querySelectorAll('tbody tr[data-row]');
-                            if (rows.length === 0) return {{}};
+                            if (rows.length === 0) {{
+                                console.log('ERROR: No rows found in table #{table_id}');
+                                return {{}};
+                            }}
 
                             let dataRow = null;
                             const isKeeperTable = '{table_type}' === 'keeper';
@@ -606,18 +613,23 @@ class BundesligaMatchScraper(BaseScraper):
 
                     # Store ALL parameters directly from FBRef (no mapping filter!)
                     # This ensures we capture ALL available data from all 6 tabs + goalkeeper
-                    for fbref_param, value in table_data.items():
-                        if value and value != '':
-                            try:
-                                # Remove commas and convert to float if possible
-                                clean_value = value.replace(',', '')
-                                if clean_value.replace('.', '').replace('-', '').isdigit():
-                                    team_stats[fbref_param] = float(clean_value)
-                                else:
+                    if table_data:
+                        logger.info(f"Extracted {len(table_data)} parameters from {tab_name}")
+                        for fbref_param, value in table_data.items():
+                            if value and value != '':
+                                try:
+                                    # Remove commas and convert to float if possible
+                                    clean_value = value.replace(',', '')
+                                    if clean_value.replace('.', '').replace('-', '').isdigit():
+                                        team_stats[fbref_param] = float(clean_value)
+                                    else:
+                                        team_stats[fbref_param] = value
+                                except:
                                     team_stats[fbref_param] = value
-                            except:
-                                team_stats[fbref_param] = value
+                    else:
+                        logger.warning(f"No data extracted from {tab_name} for table #{table_id}")
 
+                # Move this OUTSIDE the table loop for efficiency
                 match_data[team_key] = team_stats
 
             return match_data
