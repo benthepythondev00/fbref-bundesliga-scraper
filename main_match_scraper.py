@@ -71,15 +71,63 @@ async def main():
         match_data = results[0].data
         logger.info(f"✅ Successfully scraped {len(match_data)} matches")
 
-        # Export to Excel
-        logger.info("📝 Exporting data to Excel...")
+        # Export to Excel (template-based)
+        logger.info("📝 Exporting data to Excel (template format)...")
         exporter = MatchExcelExporter(
             template_path="Vorlage-Scrapen.xlsx",
             output_path=f"Bundesliga_Matches_2024_25_{len(match_data)}_games.xlsx"
         )
 
         output_file = exporter.export_match_data(match_data)
-        logger.info(f"✅ Excel file created: {output_file}")
+        logger.info(f"✅ Excel file created (template): {output_file}")
+
+        # ALSO export direct format with ALL FBRef parameters
+        logger.info("📝 Exporting data to Excel (direct format with all parameters)...")
+        direct_output = f"Bundesliga_2024_25_COMPLETE_{len(match_data)}_matches.xlsx"
+
+        # Convert to DataFrame - one row per match
+        rows = []
+        for match in match_data:
+            row = {
+                'matchday': match.get('matchday'),
+                'date': match.get('date'),
+                'home_team': match.get('home_team'),
+                'away_team': match.get('away_team'),
+                'home_score': match.get('home_score'),
+                'away_score': match.get('away_score'),
+                'venue': match.get('venue', 'Home'),
+                'home_position': match.get('home_team_position'),
+                'away_position': match.get('away_team_position'),
+            }
+
+            # Add ALL home team stats with 'home_' prefix
+            home_stats = match.get('home_team_stats', {})
+            for param, value in home_stats.items():
+                row[f'home_{param}'] = value
+
+            # Add ALL away team stats with 'away_' prefix
+            away_stats = match.get('away_team_stats', {})
+            for param, value in away_stats.items():
+                row[f'away_{param}'] = value
+
+            rows.append(row)
+
+        # Create DataFrame
+        import pandas as pd
+        df = pd.DataFrame(rows)
+
+        # Sort columns logically
+        match_info_cols = ['matchday', 'date', 'home_team', 'away_team', 'home_score', 'away_score',
+                           'venue', 'home_position', 'away_position']
+        home_cols = sorted([col for col in df.columns if col.startswith('home_') and col not in match_info_cols])
+        away_cols = sorted([col for col in df.columns if col.startswith('away_') and col not in match_info_cols])
+
+        df = df[match_info_cols + home_cols + away_cols]
+
+        # Export direct format Excel
+        df.to_excel(direct_output, index=False, sheet_name='All Matches', engine='openpyxl')
+        logger.info(f"✅ Excel file created (direct): {direct_output}")
+        logger.info(f"   📊 Total columns: {len(df.columns)} ({len(home_cols)} home + {len(away_cols)} away parameters)")
 
         # Summary statistics
         logger.info("=" * 80)

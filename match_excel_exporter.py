@@ -374,14 +374,32 @@ class MatchExcelExporter:
             'Clr': 'clearances'
         }
 
-        # First pass: direct mapping
+        # FIRST: Try direct 1:1 mapping (FBRef param name == Excel param name)
+        # This is the most common case since FBRef and our template use same names!
+        direct_mapped_count = 0
+        for fbref_param, fbref_value in fbref_stats.items():
+            if fbref_param in excel_params:
+                mapped_stats[fbref_param] = fbref_value
+                direct_mapped_count += 1
+
+        logger.info(f"Direct 1:1 mapping: {direct_mapped_count}/{len(fbref_stats)} parameters mapped")
+        logger.debug(f"FBRef parameters: {sorted(fbref_stats.keys())}")
+        logger.debug(f"Excel parameters (first 50): {sorted(excel_params)[:50]}")
+
+        # SECOND: Apply manual mapping rules (for parameters with different names)
+        manual_mapped_count = 0
         for fbref_param, excel_param in mapping_rules.items():
             if fbref_param in fbref_stats and excel_param in excel_params:
-                mapped_stats[excel_param] = fbref_stats[fbref_param]
+                # Only override if not already mapped directly
+                if excel_param not in mapped_stats:
+                    mapped_stats[excel_param] = fbref_stats[fbref_param]
+                    manual_mapped_count += 1
 
-        # Second pass: fuzzy matching for unmapped parameters
+        logger.info(f"Manual mapping: {manual_mapped_count} additional parameters mapped")
+
+        # THIRD: fuzzy matching for remaining unmapped parameters
         for fbref_key, fbref_value in fbref_stats.items():
-            if any(mapped_key in mapping_rules for mapped_key in mapped_stats.keys()):
+            if fbref_key in mapped_stats or any(fbref_key == k for k in mapping_rules.keys()):
                 continue  # Already mapped
 
             # Try to find similar parameter names in Excel template

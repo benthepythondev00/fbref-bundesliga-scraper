@@ -617,15 +617,19 @@ class BundesligaMatchScraper(BaseScraper):
                         logger.info(f"Extracted {len(table_data)} parameters from {tab_name}")
                         for fbref_param, value in table_data.items():
                             if value and value != '':
-                                try:
-                                    # Remove commas and convert to float if possible
-                                    clean_value = value.replace(',', '')
-                                    if clean_value.replace('.', '').replace('-', '').isdigit():
-                                        team_stats[fbref_param] = float(clean_value)
-                                    else:
+                                # CRITICAL FIX: Don't overwrite existing parameters!
+                                # Different tabs may have same parameter names (e.g. "goals" in Summary AND Passing)
+                                # Keep the FIRST value (usually from earlier/more important tab)
+                                if fbref_param not in team_stats:
+                                    try:
+                                        # Remove commas and convert to float if possible
+                                        clean_value = value.replace(',', '')
+                                        if clean_value.replace('.', '').replace('-', '').isdigit():
+                                            team_stats[fbref_param] = float(clean_value)
+                                        else:
+                                            team_stats[fbref_param] = value
+                                    except:
                                         team_stats[fbref_param] = value
-                                except:
-                                    team_stats[fbref_param] = value
                     else:
                         logger.warning(f"No data extracted from {tab_name} for table #{table_id}")
 
